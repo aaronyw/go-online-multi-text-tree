@@ -68,6 +68,22 @@ func main() {
 | `SearchLimit(text, limit)` | Cap distinct texts returned |
 | `Extractxt(id, hlLen, hlPos)` | Split text around highlights |
 
+### KV Index (value substring → key lookup)
+
+| Function | Description |
+|----------|-------------|
+| `NewKVIndex()` | Empty key-value index backed by suffix tree |
+| `Insert(key, value)` | Index a key-value pair |
+| `Search(substring)` | Return all keys whose value contains the substring |
+| `Len()` | Number of indexed pairs |
+
+```go
+idx := suffixtree.NewKVIndex()
+idx.Insert("user1", "John Smith")
+idx.Insert("user2", "Jane Doe")
+keys := idx.Search("John") // → ["user1"]
+```
+
 ## Performance (Raspberry Pi CM5, arm64)
 
 ```
