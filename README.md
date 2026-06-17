@@ -91,23 +91,23 @@ Under the hood each value is indexed in the suffix tree. Search traverses O(len(
 | `Search(substring)` | Return all keys whose value contains the substring |
 | `Len()` | Number of indexed pairs |
 
-## Performance (Raspberry Pi CM5, arm64, Go 1.22)
+## Performance (Raspberry Pi CM5, arm64, Go 1.24)
 
 ```
-BenchmarkUkkonenBuild-4       103,000 ops    11,600 ns/op     5 kB     92 allocs
-BenchmarkUkkonenSearch-4    2,030,000 ops       600 ns/op   400 B      6 allocs
-BenchmarkUkkonenLargeBuild-4   3,070 ops   400,000 ns/op   165 kB  2,489 allocs
+BenchmarkUkkonenBuild-4       105,000 ops    11,700 ns/op     5 kB     92 allocs
+BenchmarkUkkonenSearch-4    2,240,000 ops       550 ns/op   400 B      5 allocs
+BenchmarkUkkonenLargeBuild-4   3,060 ops   408,000 ns/op   165 kB  2,489 allocs
 
-BenchmarkKVIndexInsert-4     102,000 ops    14,800 ns/op     4 kB     52 allocs
-BenchmarkKVIndexSearch-4         300 ops 3,950,000 ns/op   1.4 MB  7,220 allocs
+BenchmarkKVIndexInsert-4     104,000 ops    14,800 ns/op     4 kB     52 allocs
+BenchmarkKVIndexSearch-4       510 ops  2,350,000 ns/op   464 kB     53 allocs
 ```
 
-**Notes:**
-- `UkkonenBuild` inserts 3 short texts (banana, mississippi, abcdefghij).
-- `UkkonenLargeBuild` inserts 50 medium texts.
-- `UkkonenSearch` runs queries `"ana"`, `"issi"`, `"cde"` against the built tree — nanoseconds per op because O(|query|) tree descent is very fast.
-- `KVIndexInsert` inserts one key-value pair per op (comparable to `UkkonenBuild` per text).
-- `KVIndexSearch` runs 5 query patterns across a 10,000-entry index. The ~4 ms per search is dominated by position enumeration and dedup. Tree descent itself stays O(|query|); wall time scales with result set size, not index size.
+**Notes (test volumes):**
+- `UkkonenBuild`: inserts 3 short texts (banana, mississippi, abcdefghij).
+- `UkkonenLargeBuild`: inserts 50 medium texts.
+- `UkkonenSearch`: runs queries `"ana"`, `"issi"`, `"cde"` against the built tree — ns/op because O(|query|) tree descent is very fast.
+- `KVIndexInsert`: inserts one key-value pair per op.
+- **`KVIndexSearch`**: runs 5 query patterns across a **10,000-entry** index. The sub-2.5 ms per search is dominated by suffix-tree leaf enumeration under the matching node. Tree descent itself stays O(|query|) — wall time scales with result set size, not index size. The internal `searchIDs` method avoids position storage, keeping allocations to just 53/op (down from 7,220 before optimisation).
 
 ## License
 

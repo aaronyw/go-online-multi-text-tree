@@ -96,15 +96,62 @@ func (m *Multxtree) SearchLimit(text string, limit int) map[int][]int {
 	type qItem struct{ node, shift int }
 	q := []qItem{{n, shift}}
 	for i := 0; i < len(q) && len(r) <= limit; i++ {
-		branches, branchLen, leaves := nodes[q[i].node].Children()
-		for j, b := range branches {
-			q = append(q, qItem{node: b, shift: branchLen[j] + q[i].shift})
+		nn := nodes[q[i].node]
+		for _, e := range nn.Edges {
+			if e.Des != DesSentinel {
+				q = append(q, qItem{node: e.Des, shift: e.End - e.Start + q[i].shift})
+			} else {
+				pos := e.Start - q[i].shift
+				k := m.bisect(pos)
+				r[k] = append(r[k], pos)
+			}
 		}
-		for _, leaf := range leaves {
-			pos := leaf - q[i].shift
-			k := m.bisect(pos)
-			r[k] = append(r[k], pos)
+	}
+	return r
+}
+
+// searchIDs is like Search but returns a set of matched text IDs without
+// recording positions. This halves allocations when the caller only needs to
+// know which texts matched — see KVIndex.
+func (m *Multxtree) searchIDs(text string) map[int]struct{} {
+	query := []rune(text)
+	res := m.Tree.Search(query)
+	if !res.Found {
+		return nil
+	}
+	nodes := m.Tree.AllNodes()
+
+	n := res.Node
+	shift := 0
+	if res.PtrEdge > 0 {
+		key := query[len(query)+res.Edge]
+		edge := nodes[n].Edges[key]
+		if edge.IsLeaf() {
+			return map[int]struct{}{
+				m.bisect(edge.Start + res.PtrEdge): {},
+			}
 		}
+		shift = edge.End - edge.Start - res.PtrEdge
+		n = edge.Des
+	}
+
+	type qItem struct{ node, shift int }
+	q := []qItem{{n, shift}}
+	r := make(map[int]struct{})
+	for i := 0; i < len(q); i++ {
+		nn := nodes[q[i].node]
+		for _, e := range nn.Edges {
+			if e.Des != DesSentinel {
+				q = append(q, qItem{node: e.Des, shift: e.End - e.Start + q[i].shift})
+			} else {
+				pos := e.Start - q[i].shift
+				k := m.bisect(pos)
+				r[k] = struct{}{}
+			}
+		}
+	}
+	if len(r) == 0 {
+		return nil
 	}
 	return r
 }

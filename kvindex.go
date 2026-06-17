@@ -29,16 +29,13 @@ func (k *KVIndex) Insert(key, value string) error {
 
 // Search returns the deduplicated list of keys whose values contain substring.
 func (k *KVIndex) Search(substring string) []string {
-	hits := k.m.Search(substring)
-	seen := make(map[string]struct{}, len(hits))
-	keys := make([]string, 0, len(hits))
-	for id := range hits {
-		key, ok := k.idKey[id]
-		if !ok {
-			continue
-		}
-		if _, exists := seen[key]; !exists {
-			seen[key] = struct{}{}
+	hitIDs := k.m.searchIDs(substring)
+	if len(hitIDs) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(hitIDs))
+	for id := range hitIDs {
+		if key, ok := k.idKey[id]; ok {
 			keys = append(keys, key)
 		}
 	}
