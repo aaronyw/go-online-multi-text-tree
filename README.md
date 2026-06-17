@@ -2,7 +2,7 @@
 
 Go port of [Online-Mulit-Text-Tree-Ukkonen-Algorithms](https://github.com/aaronyw/Online-Mulit-Text-Tree-Ukkonen-Algorithms).
 
-Package `suffixtree` provides a compressed prefix tree (Radix), a linear-time suffix tree (Ukkonen), and a multi-text wrapper that separates texts with unique Unicode delimiters.
+Package `suffixtree` provides a compressed prefix tree (Radix), a linear-time suffix tree (Ukkonen), and a multi-text wrapper that separates texts with unique Unicode delimiters. An added `KVIndex` layer wraps the suffix tree for value-substring → key lookup.
 
 ## Import
 
@@ -12,31 +12,45 @@ import "github.com/aaronyw/go-online-multi-text-tree"
 
 ## Quick Start
 
+### Substring Search (Suffix Tree)
+
 ```go
-package main
+m := suffixtree.NewMultxtree(true) // true = Ukkonen suffix tree
+m.Read("banana")
+m.Read("mississippi")
 
-import (
-    "fmt"
-    suffixtree "github.com/aaronyw/go-online-multi-text-tree"
-)
-
-func main() {
-    // Ukkonen suffix tree (substring search)
-    m := suffixtree.NewMultxtree(true)
-    m.Read("banana")
-    m.Read("mississippi")
-
-    results := m.Search("ana")
-    for id, positions := range results {
-        fmt.Printf("Text %d: matches at %v\n", id, positions)
-    }
-
-    // Radix tree (prefix search)
-    r := suffixtree.NewMultxtree(false)
-    r.Read("hello")
-    r.Read("world")
+results := m.Search("ana")
+for id, positions := range results {
+    fmt.Printf("Text %d: matches at %v\n", id, positions)
 }
 ```
+
+### Prefix Search (Radix Tree)
+
+```go
+r := suffixtree.NewMultxtree(false) // false = radix tree
+r.Read("hello")
+r.Read("world")
+```
+
+### Key / Value Index
+
+`KVIndex` maps a key to a value string and lets you find keys by value substring — a common pattern for search-as-you-type, tag-based lookup, or inverted-index-light use cases.
+
+```go
+idx := suffixtree.NewKVIndex()
+idx.Insert("user1", "John Smith")
+idx.Insert("user2", "Jane Doe")
+idx.Insert("user3", "John Appleseed")
+
+// Find all keys whose value contains "John"
+keys := idx.Search("John")        // → ["user1", "user3"]
+
+// No match returns an empty slice
+keys = idx.Search("xyz")          // → []
+```
+
+Under the hood each value is indexed in the suffix tree. Search traverses O(len(query)) steps regardless of index size, then deduplicates keys that match multiple times in the same value (e.g. `"go is great and go is fast"` searching `"go"` → `["lang"]` once, not twice).
 
 ## API
 
@@ -68,7 +82,7 @@ func main() {
 | `SearchLimit(text, limit)` | Cap distinct texts returned |
 | `Extractxt(id, hlLen, hlPos)` | Split text around highlights |
 
-### KV Index (value substring → key lookup)
+### KV Index
 
 | Function | Description |
 |----------|-------------|
@@ -77,20 +91,23 @@ func main() {
 | `Search(substring)` | Return all keys whose value contains the substring |
 | `Len()` | Number of indexed pairs |
 
-```go
-idx := suffixtree.NewKVIndex()
-idx.Insert("user1", "John Smith")
-idx.Insert("user2", "Jane Doe")
-keys := idx.Search("John") // → ["user1"]
-```
-
-## Performance (Raspberry Pi CM5, arm64)
+## Performance (Raspberry Pi CM5, arm64, Go 1.22)
 
 ```
-BenchmarkUkkonenBuild-4        39,000 ops    30,100 ns/op   13 kB   228 allocs
-BenchmarkUkkonenSearch-4      247,000 ops     4,800 ns/op    2 kB    56 allocs
-BenchmarkUkkonenLargeBuild-4   16,000 ops    73,000 ns/op   31 kB   535 allocs
+BenchmarkUkkonenBuild-4       103,000 ops    11,600 ns/op     5 kB     92 allocs
+BenchmarkUkkonenSearch-4    2,030,000 ops       600 ns/op   400 B      6 allocs
+BenchmarkUkkonenLargeBuild-4   3,070 ops   400,000 ns/op   165 kB  2,489 allocs
+
+BenchmarkKVIndexInsert-4     102,000 ops    14,800 ns/op     4 kB     52 allocs
+BenchmarkKVIndexSearch-4         300 ops 3,950,000 ns/op   1.4 MB  7,220 allocs
 ```
+
+**Notes:**
+- `UkkonenBuild` inserts 3 short texts (banana, mississippi, abcdefghij).
+- `UkkonenLargeBuild` inserts 50 medium texts.
+- `UkkonenSearch` runs queries `"ana"`, `"issi"`, `"cde"` against the built tree — nanoseconds per op because O(|query|) tree descent is very fast.
+- `KVIndexInsert` inserts one key-value pair per op (comparable to `UkkonenBuild` per text).
+- `KVIndexSearch` runs 5 query patterns across a 10,000-entry index. The ~4 ms per search is dominated by position enumeration and dedup. Tree descent itself stays O(|query|); wall time scales with result set size, not index size.
 
 ## License
 
